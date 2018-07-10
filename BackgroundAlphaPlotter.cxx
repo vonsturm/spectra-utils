@@ -23,6 +23,9 @@
 #include "TCanvas.h"
 #include "TLegend.h"
 #include "TString.h"
+#include "TPad.h"
+#include "TMath.h"
+#include "Math/ProbFuncMathCore.h"
 
 using namespace std;
 
@@ -66,7 +69,7 @@ int main( int argc, char* argv[] )
     result = find( args.begin(), args.end(), "-cs" );
     if ( result != args.end() ) colors = stoi( *(result+1) );
     // xmin xmax ymin ymax
-    double xmin = 0., xmax = 8000., ymin = 0.1, ymax = 1e3;
+    double xmin = 3500., xmax = 6000., ymin = 0.1, ymax = 1e3;
     result = find( args.begin(), args.end(), "-x" );
     if ( result != args.end() ) xmin = stod( *(result+1) );
     result = find( args.begin(), args.end(), "-X" );
@@ -79,6 +82,10 @@ int main( int argc, char* argv[] )
     string style = "long";
     result = find( args.begin(), args.end(), "--style" );
     if ( result != args.end() ) style = *(result+1);
+    // draw residuals
+    bool res_flag = false;
+    result = find( args.begin(), args.end(), "-r" );
+    if ( result != args.end() ) res_flag = true;
     //*******************************************************//
 
     // root style
@@ -137,24 +144,34 @@ int main( int argc, char* argv[] )
 
     // plot
     TCanvas canvas("c","fit result alphas");
-    canvas.SetRightMargin(0.02);
+//    canvas.SetRightMargin(0.02);
+    TPad mainpad( "mainpad", "fit result pad", 0, 0.3, 1, 1 );
+    TPad respad( "respad", "residuals pad", 0, 0, 1, 0.3);
+    if(res_flag)
+    {
+        canvas.Size( canvas.GetWindowWidth(), canvas.GetWindowHeight()*4./3. );
+        mainpad.SetMargin(0.06,0.03,0,0.01); respad.SetMargin(0.06,0.03,0.3,0);
+        mainpad.Draw(); respad.Draw();
+        mainpad.cd();
+    }
 
     double lx = 0.1, lX = 0.3, ly = 0.7, lY = 0.9;
     if( style == "short" )     { lx = 0.1; lX = 0.2; ly = 0.1; lY = 0.2; }
-    else if( style == "long" ) { lx = 0.06; lX = 0.48; ly = 0.65; lY = 0.98; }
+    else if( style == "long" ) { lx = 0.07; lX = 0.6; ly = 0.65; lY = 0.98; }
     TLegend l( lx,ly,lX,lY );
     l.SetNColumns(2);
     l.SetTextFont(42);
-    l.SetTextSize(0.03);
+    l.SetTextSize(0.04);
 
     hdata.GetXaxis()->SetRangeUser(xmin,xmax);
     hdata.GetYaxis()->SetRangeUser(ymin,ymax);
     hdata.GetYaxis()->SetTitle(Form("cts / %ikeV",binning));
-    hdata.SetMarkerStyle(21);
-    hdata.SetMarkerSize(0.5);
-    hdata.Rebin(binning); hdata.Draw("histp");
-    hmc.SetLineColor(kGray+1); hmc.Rebin(binning); hmc.Draw("histsame");
-    l.AddEntry(&hdata,"data","p");
+    hdata.SetMarkerStyle(21); hdata.SetMarkerSize(0.5);
+    hdata.SetFillColor(kGray); hdata.SetLineColor(kGray);
+    hdata.Rebin(binning); hdata.Draw("hist");
+    hmc.SetLineColor(kBlack); hmc.SetLineWidth(2);
+    hmc.Rebin(binning); hmc.Draw("histsame");
+    l.AddEntry(&hdata,"data","f");
     l.AddEntry(&hmc,"fit","l");
 
     int i = 0; //color iterator
@@ -171,7 +188,60 @@ int main( int argc, char* argv[] )
     l.Draw();
 
     // logscale
-    gPad->SetLogy();
+    if(!res_flag) gPad->SetLogy();
+    else          mainpad.SetLogy();
+
+    // compute residuals
+    auto res     = dynamic_cast<TH1D*>( hdata.Clone("h_res")       );
+    auto res_b3u = dynamic_cast<TH1D*>( hdata.Clone("h_band3_up")  );
+    auto res_b3l = dynamic_cast<TH1D*>( hdata.Clone("h_band3_low") );
+    auto res_b2u = dynamic_cast<TH1D*>( hdata.Clone("h_band2_up")  );
+    auto res_b2l = dynamic_cast<TH1D*>( hdata.Clone("h_band2_low") );
+    auto res_b1u = dynamic_cast<TH1D*>( hdata.Clone("h_band1_up")  );
+    auto res_b1l = dynamic_cast<TH1D*>( hdata.Clone("h_band1_low") );
+
+    int minbin = res->GetXaxis()->FindBin(xmin);
+    int maxbin = res->GetXaxis()->FindBin(xmax);
+
+    for (int b = minbin; b <= maxbin; b++)
+    {
+        double d = hdata.GetBinContent(b);
+        double m = hmc  .GetBinContent(b);
+        double s = TMath::NormQuantile(ROOT::Math::poisson_cdf(d, m));
+
+        res    ->SetBinContent(b, s);
+        res_b3u->SetBinContent(b, +3); res_b3l->SetBinContent(b, -3);
+        res_b2u->SetBinContent(b, +2); res_b2l->SetBinContent(b, -2);
+        res_b1u->SetBinContent(b, +1); res_b1l->SetBinContent(b, -1);
+    }
+
+    // set residual colors
+    int col3 = kOrange-9, col2 = kYellow-9, col1 = kSpring+1;
+    res_b3u->SetFillColor(col3); res_b3l->SetFillColor(col3);
+    res_b2u->SetFillColor(col2); res_b2l->SetFillColor(col2);
+    res_b1u->SetFillColor(col1); res_b1l->SetFillColor(col1);
+    res_b3u->SetLineColor(col3); res_b3l->SetLineColor(col3);
+    res_b2u->SetLineColor(col2); res_b2l->SetLineColor(col2);
+    res_b1u->SetLineColor(col1); res_b1l->SetLineColor(col1);
+
+    // draw residuals
+    if(res_flag)
+    {
+        respad.cd();
+        double rl = -3.5, ru = 3.5;
+        res->GetYaxis()->SetRangeUser(rl,ru);
+        res_b3u->GetYaxis()->SetRangeUser(rl,ru); res_b3l->GetYaxis()->SetRangeUser(rl,ru);
+        res_b2u->GetYaxis()->SetRangeUser(rl,ru); res_b2l->GetYaxis()->SetRangeUser(rl,ru);
+        res_b1u->GetYaxis()->SetRangeUser(rl,ru); res_b1l->GetYaxis()->SetRangeUser(rl,ru);
+        res_b3u->GetXaxis()->SetTitleOffset(3.0);
+        res_b3u->GetYaxis()->SetNdivisions(305);
+        res_b3u->Draw("hist");     res_b2u->Draw("histsame"); res_b1u->Draw("histsame");
+        res_b3l->Draw("histsame"); res_b2l->Draw("histsame"); res_b1l->Draw("histsame");
+        res->Draw("histpsame");
+        respad.RedrawAxis("");
+    }
+
+    canvas.Update();
 
     // print pdf
     int index = output_filename.find_last_of(".");
@@ -185,6 +255,9 @@ int main( int argc, char* argv[] )
     hdata.Write();
     hmc.Write();
     for( auto h : hcomp ) h.Write();
+    res_b3u->Write(); res_b3l->Write();
+    res_b2u->Write(); res_b2l->Write();
+    res_b1u->Write(); res_b1l->Write();
     outfile.Close();
 
     return 0;
@@ -202,6 +275,7 @@ void Usage()
     cout << "                --color-sequence -cs <int> : choose a color sequence number (1 rainbow, 2 enrBEGe, 3 enrCoax, 4 natCoax)\n";
     cout << "                -xXyY <double>             : x/y min/max values e.g. -x 0. -X 8000.\n";
     cout << "                --style <style>            : set canvas style (short,long)\n";
+    cout << "                -r                         : draw residuals as normalized quantiles (brazilian plot)\n";
     return;
 }
 
