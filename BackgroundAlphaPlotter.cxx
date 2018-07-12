@@ -133,7 +133,7 @@ int main( int argc, char* argv[] )
 
     // color sequence
     vector<int> sequence1 = { kViolet, kMagenta, kPink, kRed, kOrange, kYellow, kSpring+1, kGreen, kTeal, kCyan, kAzure, kBlue }; // rainbow
-    vector<int> sequence2 = {                    kPink, kRed, kOrange,                           kTeal,        kAzure, kBlue }; // enrBEGe
+    vector<int> sequence2 = {                    kPink, kRed, kOrange,                             kTeal,        kAzure, kBlue }; // enrBEGe
     vector<int> sequence3 = {          kMagenta, kPink, kRed, kOrange, kYellow, kSpring+1,         kTeal,        kAzure, kBlue }; // enrCoax
     vector<int> sequence4 = { kViolet, kMagenta, kPink, kRed, kOrange,          kSpring+1,         kTeal, kCyan, kAzure, kBlue }; // natCoax
     vector<int> & sequence = sequence1;

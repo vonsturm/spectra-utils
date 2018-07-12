@@ -1,8 +1,11 @@
 AlphaPlotter
 HistogramCombiner
 BackgroundAlphaPlotter
+OplotBKGSpectra
 
 ./alphas
 *.root
 *.pdf
 *.txt
+
+test*
